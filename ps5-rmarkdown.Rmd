@@ -1,0 +1,283 @@
+---
+title: 'PS5: rmarkdown and plotting'
+author: "Alexia Chan"
+date: "2023-02-15"
+output: html_document
+---
+
+# 1.1
+```{r, message=FALSE}
+library(knitr)
+library(tidyverse)
+data <- read.delim("gapminder.csv.bz2")
+```
+
+# 1.2
+
+##### There are `r nrow(data)` rows and `r ncol(data)` columns
+
+# 1.3
+```{r}
+sample_n(data, 3) %>% 
+  knitr::kable()
+```
+
+# 2.1
+##### Displays the number of different countries that each variable contains
+```{r, message=FALSE}
+data %>% 
+  select(name, iso3, iso2) %>% 
+  summarise(name = n_distinct(name), iso3 = n_distinct(iso3), iso2 = n_distinct(iso2))
+```
+
+# 2.2 (a)
+##### Iso-2 codes that correspond to more than 1 name
+```{r, message=FALSE}
+data %>% 
+  select(iso2, name) %>% 
+  group_by(iso2) %>% 
+  summarise(unique = n_distinct(name)) %>%   
+  filter(unique > 1) 
+```
+
+yes, there is one iso-2 code that has two names that correspond to it
+
+# 2.2 (b) 
+##### Countries that correspond to more that 1 iso-3 code
+```{r message=FALSE}
+data %>% 
+  group_by(name) %>% 
+  select(iso3, name) %>% 
+  summarise(unique = n_distinct(iso3)) %>% 
+  filter(unique > 1)
+```
+
+yes, there is one name that has four iso-3 codes that correspond to it
+
+# 2.3
+##### Minimum and maximum year in the data
+```{r}
+data %>% 
+  select(time) %>% 
+  filter(!is.na(time)) %>% 
+  summarize(min = min(time), max = max(time))
+```
+
+# 3.1
+##### Missing CO2 and CO2 PC emissions per year
+displays the top few countries with the largest number of missing CO2 data
+```{r}
+data %>%
+  group_by(time) %>% 
+  select(time, co2, co2_PC) %>% 
+  summarise(co2 = sum(is.na(co2)), co2_PC = sum(is.na(co2_PC)), sum = co2 + co2_PC) %>% 
+  arrange(-sum) %>% 
+  head()
+```
+years 2017-2019 have the most missing data
+
+# 3.2
+##### Plot shows total CO2 emissions over time for each region
+```{r message=FALSE, warning=FALSE}
+data %>% 
+  filter(iso3 == c("USA", "CHN", "IND", "JPN", "ITA")) %>% 
+  ggplot() +
+    geom_line(aes(x = time, y = co2, col = iso3)) +
+    geom_line(aes(x = time, y = co2_PC, col = iso3)) +
+    ggtitle("Total CO2 Emissions Over Time") +
+    xlab("Years") +
+    ylab("Total CO2")
+```
+
+- Most countries increase their CO2 emissions over time
+- China has the highest, fastest increase out of all of them
+- The USA is the only country where CO2 starts to go down
+
+# 3.3
+##### Plot of CO2 emissions per capita over time for each country
+```{r message=FALSE, warning=FALSE}
+data %>% 
+  filter(iso3 == c("USA", "CHN", "IND", "JPN", "ITA")) %>% 
+  ggplot() +
+    geom_line(aes(x = time, y = co2_PC, col = iso3)) +
+    ggtitle("CO2 Emissions per Capita") +
+    xlab("Years") +
+    ylab("CO2 per Capita")
+```
+
+- This suggests that the USA produces the most CO2, and India produces the least
+
+# 3.4 
+##### Average CO2 emissions per capita for each continent in 2016
+
+```{r message=FALSE}
+data %>% 
+  group_by(region) %>%
+  filter(time == 2016) %>% 
+  select(region, co2_PC) %>% 
+  filter(!is.na(co2_PC), nzchar(region)) %>% 
+  summarise(avg = mean(co2_PC))
+```
+
+- Europe produces the most CO2 on average
+- Africa produces the least CO2 on average
+
+# 3.5
+##### Average CO2 emissions per capita for each continent in 1960 and 2016
+```{r message=FALSE, warning=FALSE}
+years <- c(1960, 2016)
+
+databarplot <- data %>%
+  filter(time %in% years) %>% 
+  group_by(region, time) %>%
+  #select(region, co2_PC) %>% 
+  filter(!is.na(co2_PC), nzchar(region)) %>%
+  summarise(avg = mean(co2_PC), groups = "keep") 
+
+ggplot(data = databarplot) +
+  geom_col(aes(x = region, y = avg, fill = as.factor(time)), stat = "identity", pos = position_dodge2(0)) +
+  ggtitle("Average CO2 Emissions per Capita") +
+  xlab("Region") +
+  ylab("Average CO2 Emissions per Capita") +
+  labs(fill = "Year")
+```
+
+# 3.6
+##### Top 3 largest and smallest countries in terms of CO2 PC emission in 2016
+(2019 has many NA values)
+```{r message=FALSE}
+dataset <- data %>% 
+  filter(time == 2016, !is.na(co2_PC), nzchar(name)) %>% 
+  select(name, co2_PC) %>%
+  group_by(name) %>%
+  arrange(-co2_PC)
+
+# Top 3 countries with the largest CO2 PC emission
+dataset %>% 
+  head(3)
+# Top 3 countries with the smallest CO2 PC emission
+dataset %>% 
+  tail(3)
+```
+
+# 4.1
+##### Plot of GDP per capita and life expectancy per country in 1960
+```{r message=FALSE, warning=FALSE}
+data %>% 
+  filter(time == 1960, nzchar(region)) %>% 
+  ggplot() +
+    geom_point(aes(x = GDP_PC, y = lifeExpectancy, col = region, size = totalPopulation)) +
+    ggtitle("GDP per Capita vs Life Expectancy by Country in 1960")
+    
+```
+
+- Countries with high GDPs tend to have high life expectancies
+- The largest regions have the lowest GDP, but in general, size doesn't seem to have a large effect 
+- Europe has the highest life expectancy and GDP
+- Africa has the lowest life expectancy and GDP
+
+# 4.2
+##### Plot of GDP per capita and life expectancy per country in 2019
+```{r message=FALSE, warning=FALSE}
+data %>% 
+  filter(time == 2019, nzchar(region)) %>% 
+  ggplot() +
+    geom_point(aes(x = GDP_PC, y = lifeExpectancy, col = region, size = totalPopulation)) +
+    ggtitle("GDP per Capita vs Life Expectancy by Country in 2019")
+```
+
+- Africa has the lowest GDP and life expectancy
+- China has the largest total population but a low GDP
+
+# 4.3
+##### Comparison between plots above
+- Each country's ranking is relatively the same since 1960
+- Life expectancy overall has increased by about 10 years
+- GDP overall has increased 
+
+# 4.4
+##### Average life expectancy per continent in 1960 and 2019
+```{r message=FALSE, warning=FALSE}
+data %>%
+  select(region, lifeExpectancy, time) %>%
+  group_by(time, region) %>% 
+  filter(!is.na(lifeExpectancy), nzchar(region)) %>% 
+  filter(time == c(1960, 2019)) %>% 
+  summarise(average = mean(lifeExpectancy))
+```
+
+The results did fit with what I see on the figures
+
+# 4.5 
+##### Average life expectancy growth from 1960-2019 per region
+```{r message=FALSE, warning=FALSE}
+data %>% 
+  filter(time == c(1960, 2019), !is.na(lifeExpectancy), nzchar(region)) %>% 
+  select(region, lifeExpectancy, time) %>% 
+  group_by(region, time) %>% 
+  summarise(average = mean(lifeExpectancy)) %>% 
+  mutate(previous = lag(average), growth = average - previous) %>% 
+  select(region, growth) %>% 
+  filter(!is.na(growth))
+```
+
+# 4.6
+##### Plot of GDP PC for 1960 and 2019
+```{r message=FALSE}
+years <-  c(1960, 2019)
+graph <-  data %>% 
+  filter(time %in% years, !is.na(GDP_PC)) %>% 
+  group_by(time) %>% 
+  select(GDP_PC, time) 
+
+ggplot(data = graph) +
+  geom_histogram(aes(x = GDP_PC, fill = as.factor(time)), position = "dodge")+
+  ggtitle("GDP Per Capita for 1960 and 2019")
+```
+
+# 4.7 
+##### Ranking of US in terms of life expectancy in 1960 and 2019
+```{r message=FALSE, warning=FALSE}
+data %>% 
+  select(name, lifeExpectancy, time) %>% 
+  filter(time == 1960, !is.na(lifeExpectancy), nzchar(name)) %>% 
+  arrange(-lifeExpectancy) %>% 
+  mutate(rank = rank(-lifeExpectancy)) %>% 
+  filter(name == "United States of America")
+data %>% 
+  select(name, lifeExpectancy, time) %>% 
+  filter(time == 2019, !is.na(lifeExpectancy), nzchar(name)) %>% 
+  arrange(-lifeExpectancy) %>% 
+  mutate(rank = rank(-lifeExpectancy)) %>% 
+  filter(name == "United States of America")
+```
+
+The US is ranked 17 in terms of life expectancy in 1960, and 46 in 2019
+
+# 4.8 
+##### Relative rank divided by the corresponding number of countries in that year
+```{r message=FALSE, warning=FALSE}
+countries1960 <- data %>% 
+  filter(time == 1960, !is.na(lifeExpectancy), nzchar(name)) %>% 
+  summarise(countries = n())
+countries2019 <- data %>% 
+  filter(time == 2019, !is.na(lifeExpectancy), nzchar(name)) %>% 
+  summarise(countries = n())
+
+data %>% 
+  filter(time == 1960, !is.na(lifeExpectancy), nzchar(name)) %>%
+  select(name, lifeExpectancy) %>% 
+  arrange(-lifeExpectancy) %>% 
+  mutate(rank = rank(-lifeExpectancy), new = rank / 188) %>% 
+  filter(name == "United States of America")
+data %>% 
+  filter(time == 2019, !is.na(lifeExpectancy), nzchar(name)) %>%
+  select(name, lifeExpectancy) %>% 
+  arrange(-lifeExpectancy) %>% 
+  mutate(rank = rank(-lifeExpectancy), new = rank / 196) %>% 
+  filter(name == "United States of America")
+```
+
+I probably spent about 8.5 hours on this assignment
+
+
